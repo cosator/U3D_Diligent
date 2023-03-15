@@ -126,6 +126,26 @@ void PS(float2 iTexCoord : TEXCOORD0,
     
     #else
 
+    #ifdef DILIGENT
+    
+    #ifdef BLUR16
+    oColor = GaussianBlur(BlurKernelSize, cBloomHDRBlurDir, cBright16InvSize * cBloomHDRBlurRadius, cBloomHDRBlurSigma, tDiffMap, tDiffMap_sampler, iTexCoord);
+    #endif
+
+    #ifdef BLUR8
+    oColor = GaussianBlur(BlurKernelSize, cBloomHDRBlurDir, cBright8InvSize * cBloomHDRBlurRadius, cBloomHDRBlurSigma, tDiffMap, tDiffMap_sampler, iTexCoord);
+    #endif
+
+    #ifdef BLUR4
+    oColor = GaussianBlur(BlurKernelSize, cBloomHDRBlurDir, cBright4InvSize * cBloomHDRBlurRadius, cBloomHDRBlurSigma, tDiffMap, tDiffMap_sampler, iTexCoord);
+    #endif
+
+    #ifdef BLUR2
+    oColor = GaussianBlur(BlurKernelSize, cBloomHDRBlurDir, cBright2InvSize * cBloomHDRBlurRadius, cBloomHDRBlurSigma, tDiffMap, tDiffMap_sampler, iTexCoord);
+    #endif
+    
+    #else
+
     #ifdef BLUR16
     oColor = GaussianBlur(BlurKernelSize, cBloomHDRBlurDir, cBright16InvSize * cBloomHDRBlurRadius, cBloomHDRBlurSigma, tDiffMap, sDiffMap, iTexCoord);
     #endif
@@ -140,6 +160,8 @@ void PS(float2 iTexCoord : TEXCOORD0,
 
     #ifdef BLUR2
     oColor = GaussianBlur(BlurKernelSize, cBloomHDRBlurDir, cBright2InvSize * cBloomHDRBlurRadius, cBloomHDRBlurSigma, tDiffMap, sDiffMap, iTexCoord);
+    #endif
+   
     #endif
     
     #endif

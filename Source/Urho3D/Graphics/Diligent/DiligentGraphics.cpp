@@ -2818,6 +2818,12 @@ void Graphics::SetTextureUnitMappings()
     textureUnits_["VolumeMap"] = TU_VOLUMEMAP;
     textureUnits_["ZoneCubeMap"] = TU_ZONE;
     textureUnits_["ZoneVolumeMap"] = TU_ZONE;
+
+    textureUnits_["AlbedoBuffer"] = TU_ALBEDOBUFFER;
+    textureUnits_["NormalBuffer"] = TU_NORMALBUFFER;
+    textureUnits_["RoughMetalFresnel"] = TU_SPECULAR;
+    textureUnits_["DepthBuffer"] = TU_DEPTHBUFFER;
+    textureUnits_["LightBuffer"] = TU_LIGHTBUFFER;
 }
 
 }

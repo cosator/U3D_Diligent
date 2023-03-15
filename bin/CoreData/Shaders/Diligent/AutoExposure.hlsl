@@ -84,7 +84,11 @@ void PS(float2 iTexCoord : TEXCOORD0,
     #if !defined(D3D11) && !defined(DILIGENT)
     oColor = GatherAvgLum(sDiffMap, iTexCoord, cLum64InvSize);
     #else
+    #ifdef DILIGENT
+    oColor = GatherAvgLum(tDiffMap, tDiffMap_sampler, iTexCoord, cLum64InvSize);
+    #else
     oColor = GatherAvgLum(tDiffMap, sDiffMap, iTexCoord, cLum64InvSize);
+    #endif
     #endif
     #endif
 
@@ -92,7 +96,11 @@ void PS(float2 iTexCoord : TEXCOORD0,
     #if !defined(D3D11) && !defined(DILIGENT)
     oColor = GatherAvgLum(sDiffMap, iTexCoord, cLum16InvSize);
     #else
+    #ifdef DILIGENT
+    oColor = GatherAvgLum(tDiffMap, tDiffMap_sampler, iTexCoord, cLum16InvSize);
+    #else
     oColor = GatherAvgLum(tDiffMap, sDiffMap, iTexCoord, cLum16InvSize);
+    #endif
     #endif
     #endif
 
@@ -100,7 +108,11 @@ void PS(float2 iTexCoord : TEXCOORD0,
     #if !defined(D3D11) && !defined(DILIGENT)
     oColor = exp(GatherAvgLum(sDiffMap, iTexCoord, cLum4InvSize) / 16.0);
     #else
+    #ifdef DILIGENT
+    oColor = exp(GatherAvgLum(tDiffMap, tDiffMap_sampler, iTexCoord, cLum4InvSize) / 16.0);
+    #else
     oColor = exp(GatherAvgLum(tDiffMap, sDiffMap, iTexCoord, cLum4InvSize) / 16.0);
+    #endif
     #endif
     #endif
 

@@ -711,9 +711,15 @@ void ShaderVariation::CreateFromSource()
     shaderCreateInfo.LoadConstantBufferReflection = true;
     shaderCreateInfo.HLSLVersion = {5, 0};
 
-    FILE* f = fopen((GetFullName() + "_source_code_" + (type_ == VS ? "vs" : "ps") + ".txt").CString(), "w");
-    fprintf(f, "%s", sourceCode.CString());
+    // TODO: Remove
+#if 0
+    const String fileName = GetFullName() + "_source_code_" + (type_ == VS ? "vs" : "ps") + ".txt";
+    const char* fileNameCString = fileName.CString();
+    const char* sourceCodeCString = sourceCode.CString();
+    FILE* f = fopen(fileNameCString, "w");
+    fprintf(f, "%s", sourceCodeCString);
     fclose(f);
+#endif
 
     graphics_->GetImpl()->GetDevice()->CreateShader(shaderCreateInfo, (IShader**)&object_.ptr_);
     if (object_.ptr_ == nullptr)
