@@ -134,6 +134,9 @@ public:
     /// Return constant buffer data sizes.
     const unsigned* GetConstantBufferSizes() const { return &constantBufferSizes_[0]; }
 
+    /// Return constant buffer names.
+    const String* GetConstantBufferNames() const { return &constantBufferNames_[0]; }
+
     /// Return defines with the CLIPPLANE define appended. Used internally on Direct3D11 only, will be empty on other APIs.
     const String& GetDefinesClipPlane() { return definesClipPlane_; }
 
@@ -145,6 +148,12 @@ private:
     bool LoadByteCode(const String& binaryShaderName);
     /// Compile from source. Return true if successful.
     bool Compile();
+    /// Compile from source to binary. Return true if successful.
+    bool CompileToBinary();
+    /// Create shader from binary
+    void CreateFromBinary();
+    /// Create shader from source
+    void CreateFromSource();
     /// Inspect the constant parameters and input layout (if applicable) from the shader bytecode.
     void ParseParameters(unsigned char* bufData, unsigned bufSize);
     /// Save bytecode to a file.
@@ -164,6 +173,8 @@ private:
     bool useTextureUnits_[MAX_TEXTURE_UNITS]{};
     /// Constant buffer sizes. 0 if a constant buffer slot is not in use.
     unsigned constantBufferSizes_[MAX_SHADER_PARAMETER_GROUPS]{};
+    /// Constant buffer names.
+    String constantBufferNames_[MAX_SHADER_PARAMETER_GROUPS]{};
     /// Shader bytecode. Needed for inspecting the input signature and parameters. Not used on OpenGL.
     PODVector<unsigned char> byteCode_;
     /// Shader name.

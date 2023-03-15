@@ -78,7 +78,7 @@ bool IndexBuffer::SetSize(unsigned indexCount, bool largeIndices, bool dynamic)
     Unlock();
 
     indexCount_ = indexCount;
-    indexSize_ = (unsigned)(largeIndices ? sizeof(unsigned) : sizeof(unsigned short));
+    indexSize_ = (unsigned)(largeIndices ? sizeof(uint32_t) : sizeof(uint16_t));
     dynamic_ = dynamic;
 
     if (shadowed_ && indexCount_ && indexSize_)

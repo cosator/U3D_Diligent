@@ -152,11 +152,15 @@ if (URHO3D_DATABASE)
 else ()
     list (APPEND EXCLUDED_SOURCE_DIRS Database)
 endif ()
-if (URHO3D_OPENGL)
+if (URHO3D_DILIGENT)
+    list (APPEND EXCLUDED_SOURCE_DIRS Graphics/OpenGL)
+    list (APPEND EXCLUDED_SOURCE_DIRS Graphics/Direct3D9 Graphics/Direct3D11)
+elseif (URHO3D_OPENGL)
     # Exclude the opposite source directory
     list (APPEND EXCLUDED_SOURCE_DIRS Graphics/Direct3D9 Graphics/Direct3D11)
 else ()
     list (APPEND EXCLUDED_SOURCE_DIRS Graphics/OpenGL)
+	list (APPEND EXCLUDED_SOURCE_DIRS Graphics/Diligent)
     if (URHO3D_D3D11)
         list (APPEND EXCLUDED_SOURCE_DIRS Graphics/Direct3D9)
     else ()
@@ -384,11 +388,24 @@ if (URHO3D_CLANG_TOOLS)
     set (ANNOTATE_NONSCRIPTABLE "__attribute__((annotate(\"nonscriptable\")))")
 endif ()
 set (APPENDIX "${APPENDIX}\n#define NONSCRIPTABLE ${ANNOTATE_NONSCRIPTABLE}\n\n")
-foreach (DEFINE URHO3D_STATIC_DEFINE URHO3D_OPENGL URHO3D_D3D11 URHO3D_SSE URHO3D_DATABASE_ODBC URHO3D_DATABASE_SQLITE URHO3D_LUAJIT URHO3D_TESTING CLANG_PRE_STANDARD)
+foreach (DEFINE URHO3D_STATIC_DEFINE URHO3D_OPENGL URHO3D_D3D11 URHO3D_DILIGENT URHO3D_SSE URHO3D_DATABASE_ODBC URHO3D_DATABASE_SQLITE URHO3D_LUAJIT URHO3D_TESTING CLANG_PRE_STANDARD)
     if (${DEFINE})
         set (APPENDIX "${APPENDIX}#define ${DEFINE}\n")
     endif ()
 endforeach()
+
+if (URHO3D_DILIGENT)
+    message("========================URHO3D_DILIGENT Defined================================")
+    target_include_directories(Urho3D PRIVATE "../ThirdParty/DiligentCore")
+
+    target_link_libraries(Urho3D
+        Diligent-GraphicsEngineD3D11-static
+        Diligent-GraphicsEngineOpenGL-static
+        Diligent-GraphicsEngineD3D12-static
+        Diligent-GraphicsEngineVk-static
+    )
+endif ()
+
 if (URHO3D_FORCE_AS_MAX_PORTABILITY)
     set (APPENDIX "${APPENDIX}#define AS_MAX_PORTABILITY\n")
 endif ()

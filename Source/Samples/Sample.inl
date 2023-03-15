@@ -52,6 +52,7 @@ Sample::Sample(Context* context) :
     screenJoystickSettingsIndex_(M_MAX_UNSIGNED),
     paused_(false)
 {
+    OpenConsoleWindow();
 }
 
 void Sample::Setup()

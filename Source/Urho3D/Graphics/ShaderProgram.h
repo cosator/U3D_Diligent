@@ -24,7 +24,9 @@
 
 // Note: ShaderProgram class is purposefully API-specific. It should not be used by Urho3D client applications.
 
-#if defined(URHO3D_OPENGL)
+#if defined(URHO3D_DILIGENT)
+#include "Diligent/DiligentShaderProgram.h"
+#elif defined(URHO3D_OPENGL)
 #include "OpenGL/OGLShaderProgram.h"
 #elif defined(URHO3D_D3D11)
 #include "Direct3D11/D3D11ShaderProgram.h"

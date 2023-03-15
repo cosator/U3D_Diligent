@@ -72,6 +72,10 @@ foreach (TARGET ETCPACK fmt FreeType LZ4 PugiXml rapidjson SDL StanHull STB)
     add_subdirectory (ThirdParty/${TARGET})
 endforeach ()
 
+if (URHO3D_DILIGENT)
+    add_subdirectory (ThirdParty/DiligentCore)
+endif ()
+
 if (URHO3D_ANGELSCRIPT)
     add_subdirectory (ThirdParty/AngelScript)
     if (WEB OR (ARM AND URHO3D_64BIT) OR URHO3D_FORCE_AS_MAX_PORTABILITY)

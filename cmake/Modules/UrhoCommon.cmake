@@ -372,6 +372,11 @@ if (RPI)
     set_property (CACHE RPI_ABI PROPERTY STRINGS ${RPI_SUPPORTED_ABIS})
 endif ()
 # Handle mutually exclusive options and implied options
+if (URHO3D_DILIGENT)
+    set (URHO3D_D3D11 0)
+    set (URHO3D_OPENGL 0)
+    unset (URHO3D_OPENGL CACHE)
+endif ()
 if (URHO3D_D3D11)
     set (URHO3D_OPENGL 0)
     unset (URHO3D_OPENGL CACHE)
@@ -509,7 +514,7 @@ if (WIN32 AND NOT CMAKE_PROJECT_NAME MATCHES ^Urho3D-ExternalProject-)
 endif ()
 
 # Platform and compiler specific options
-set (CMAKE_CXX_STANDARD 11)
+set (CMAKE_CXX_STANDARD 17)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_CXX_EXTENSIONS OFF)
 if (EMSCRIPTEN)     # It appears CMake does not detect C++standard for EMCC correctly, so do it the old way still
