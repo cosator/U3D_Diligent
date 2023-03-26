@@ -152,7 +152,11 @@ void SwapChainD3D11Impl::Present(Uint32 SyncInterval)
     // https://docs.microsoft.com/en-us/windows/uwp/gaming/reduce-latency-with-dxgi-1-3-swap-chains#step-4-wait-before-rendering-each-frame
     WaitForFrame();
 
+#ifdef SWAP_CHAIN_ALLOW_TEARING
+    m_pSwapChain->Present(SyncInterval, SyncInterval ? 0 : DXGI_PRESENT_ALLOW_TEARING);
+#else
     m_pSwapChain->Present(SyncInterval, 0);
+#endif
 }
 
 void SwapChainD3D11Impl::UpdateSwapChain(bool CreateNew)

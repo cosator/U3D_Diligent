@@ -179,7 +179,7 @@ private:
     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> deviceContext_;
     Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain_;
     std::unordered_map<
-        std::tuple<ShaderVariation*, ShaderVariation*, unsigned, unsigned, unsigned, unsigned long long, PrimitiveType>,
+        std::tuple<ShaderVariation*, ShaderVariation*, unsigned, unsigned, unsigned, unsigned long long, PrimitiveType, uint8_t>,
         PipelineState> pipelineStates_;
     Diligent::RefCntAutoPtr<Diligent::IPipelineState> currentPipelineState_;
     Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> currentShaderResourceBinding_;
@@ -263,6 +263,8 @@ private:
     PrimitiveType primitiveType_ = TRIANGLE_LIST;
     /// Primitive type dirty flag.
     bool primitiveTypeDirty_ = false;
+
+    uint8_t renderTargetHash_ = 0;
 
 #if 0
     /// Graphics device.

@@ -326,6 +326,10 @@ bool Graphics::SetScreenMode(int width, int height, const ScreenModeParams& para
 
     // Ensure that parameters are properly filled
     ScreenModeParams newParams = params;
+
+    // TODO: Figure out how to do exclusive fullscreen with Diligent
+    newParams.borderless_ = newParams.fullscreen_ ? true : false;
+
     AdjustScreenMode(width, height, newParams, maximize);
 
     // Find out the full screen mode display format (match desktop color depth)
@@ -1338,6 +1342,18 @@ void Graphics::SetTextureParametersDirty()
 
 void Graphics::ResetRenderTargets()
 {
+    impl_->defaultRenderTargetView_ = impl_->swapChain_->GetCurrentBackBufferRTV();
+    if (impl_->defaultRenderTargetView_ == nullptr)
+    {
+        URHO3D_LOGERROR("Failed to get backbuffer rendertarget view");
+    }
+
+    impl_->defaultDepthStencilView_ = impl_->swapChain_->GetDepthBufferDSV();
+    if (impl_->defaultDepthStencilView_ == nullptr)
+    {
+        URHO3D_LOGERROR("Failed to get depth-stencil view");
+    }
+
     for (unsigned i = 0; i < MAX_RENDERTARGETS; ++i)
         SetRenderTarget(i, (RenderSurface*)nullptr);
     SetDepthStencil((RenderSurface*)nullptr);
@@ -2164,28 +2180,69 @@ void Graphics::AdjustWindow(int& newWidth, int& newHeight, bool& newFullscreen, 
 
 bool Graphics::CreateDevice(int width, int height)
 {
-    auto* pFactoryD3D11 = Diligent::GetEngineFactoryD3D11();
+    const RENDER_DEVICE_TYPE deviceType = RENDER_DEVICE_TYPE_D3D11;
 
-    if (!impl_->device_)
+    switch (deviceType)
     {
-        Diligent::EngineD3D11CreateInfo EngineCI;
-        pFactoryD3D11->CreateDeviceAndContextsD3D11(EngineCI, &impl_->device_, &impl_->deviceContext_);
+    case RENDER_DEVICE_TYPE_D3D11:
+        {
+            auto* pFactoryD3D11 = Diligent::GetEngineFactoryD3D11();
 
-        CheckFeatureSupport();
+            if (!impl_->device_)
+            {
+                Diligent::EngineD3D11CreateInfo EngineCI;
+                pFactoryD3D11->CreateDeviceAndContextsD3D11(EngineCI, &impl_->device_, &impl_->deviceContext_);
+
+                CheckFeatureSupport();
+            }
+
+            Diligent::Win32NativeWindow Window{GetWindowHandle(window_)};
+            impl_->swapChainInitDesc_.BufferCount = 3;
+            impl_->swapChainInitDesc_.Width = (UINT)width;
+            impl_->swapChainInitDesc_.Height = (UINT)height;
+            impl_->swapChainInitDesc_.ColorBufferFormat = sRGB_ ? TEX_FORMAT_RGBA8_UNORM_SRGB : TEX_FORMAT_RGBA8_UNORM;
+            impl_->swapChainInitDesc_.DepthBufferFormat = TEX_FORMAT_D32_FLOAT;
+            impl_->swapChainInitDesc_.DefaultDepthValue = 0.f;
+
+            pFactoryD3D11->CreateSwapChainD3D11(impl_->device_, impl_->deviceContext_, impl_->swapChainInitDesc_,
+                                                Diligent::FullScreenModeDesc{}, Window, &impl_->swapChain_);
+
+            impl_->deviceType_ = Diligent::RENDER_DEVICE_TYPE_D3D11;
+        }
+        break;
+    case RENDER_DEVICE_TYPE_D3D12:
+        {
+            auto* pFactoryD3D12 = Diligent::GetEngineFactoryD3D12();
+
+            if (!impl_->device_)
+            {
+                Diligent::EngineD3D12CreateInfo EngineCI;
+                EngineCI.GPUDescriptorHeapDynamicSize[0] = 65536 * 4;
+                EngineCI.GPUDescriptorHeapDynamicSize[1] = 2048 - 64;
+                EngineCI.GPUDescriptorHeapSize[0] = 65536; // For mutable mode
+                EngineCI.GPUDescriptorHeapSize[1] = 64; // For mutable mode
+                pFactoryD3D12->CreateDeviceAndContextsD3D12(EngineCI, &impl_->device_, &impl_->deviceContext_);
+
+                CheckFeatureSupport();
+            }
+
+            Diligent::Win32NativeWindow Window{GetWindowHandle(window_)};
+            impl_->swapChainInitDesc_.BufferCount = 3;
+            impl_->swapChainInitDesc_.Width = (UINT)width;
+            impl_->swapChainInitDesc_.Height = (UINT)height;
+            impl_->swapChainInitDesc_.ColorBufferFormat = sRGB_ ? TEX_FORMAT_RGBA8_UNORM_SRGB : TEX_FORMAT_RGBA8_UNORM;
+            impl_->swapChainInitDesc_.DepthBufferFormat = TEX_FORMAT_D32_FLOAT;
+            impl_->swapChainInitDesc_.DefaultDepthValue = 0.f;
+
+            pFactoryD3D12->CreateSwapChainD3D12(impl_->device_, impl_->deviceContext_, impl_->swapChainInitDesc_,
+                                                Diligent::FullScreenModeDesc{}, Window, &impl_->swapChain_);
+
+            impl_->deviceType_ = Diligent::RENDER_DEVICE_TYPE_D3D12;
+        }
+        break;
+    default:
+        return false;
     }
-
-    Diligent::Win32NativeWindow Window{GetWindowHandle(window_)};
-    impl_->swapChainInitDesc_.BufferCount = 16;
-    impl_->swapChainInitDesc_.Width = (UINT)width;
-    impl_->swapChainInitDesc_.Height = (UINT)height;
-    impl_->swapChainInitDesc_.ColorBufferFormat = sRGB_ ? TEX_FORMAT_RGBA8_UNORM_SRGB : TEX_FORMAT_RGBA8_UNORM;
-    impl_->swapChainInitDesc_.DepthBufferFormat = TEX_FORMAT_D32_FLOAT;
-    impl_->swapChainInitDesc_.DefaultDepthValue = 0.f;
-
-    pFactoryD3D11->CreateSwapChainD3D11(impl_->device_, impl_->deviceContext_, impl_->swapChainInitDesc_,
-                                        Diligent::FullScreenModeDesc{}, Window, &impl_->swapChain_);
-
-    impl_->deviceType_ = Diligent::RENDER_DEVICE_TYPE_D3D11;
 
     return true;
 }
@@ -2336,8 +2393,10 @@ void Graphics::ResetCachedState()
 void Graphics::PrepareDraw()
 {
     bool pipelineStateChanged = false;
+    bool renderTargetHashChanged = false;
     if (impl_->renderTargetsDirty_)
     {
+        uint8_t newRenderTargetHash = 0;
         impl_->depthStencilView_ = (depthStencil_ && depthStencil_->GetUsage() == TEXTURE_DEPTHSTENCIL)
                                        ? (ITextureView*)depthStencil_->GetRenderTargetView()
                                        : impl_->defaultDepthStencilView_;
@@ -2347,9 +2406,13 @@ void Graphics::PrepareDraw()
             impl_->depthStencilView_ = (ITextureView*)depthStencil_->GetReadOnlyView();
 
         for (unsigned i = 0; i < MAX_RENDERTARGETS; ++i)
+        {
             impl_->renderTargetViews_[i] = (renderTargets_[i] && renderTargets_[i]->GetUsage() == TEXTURE_RENDERTARGET)
                                                ? (ITextureView*)renderTargets_[i]->GetRenderTargetView()
                                                : nullptr;
+            if (impl_->renderTargetViews_[i])
+                newRenderTargetHash |= 1 << i;
+        }
         // If rendertarget 0 is null and not doing depth-only rendering, render to the backbuffer
         // Special case: if rendertarget 0 is null and depth stencil has same size as backbuffer, assume the intention
         // is to do backbuffer rendering with a custom depth stencil
@@ -2357,12 +2420,21 @@ void Graphics::PrepareDraw()
                                                       depthStencil_->GetHeight() == height_)))
             impl_->renderTargetViews_[0] = impl_->defaultRenderTargetView_;
 
+        if (impl_->renderTargetViews_[0])
+            newRenderTargetHash |= 1;
+
         impl_->deviceContext_->SetRenderTargets(MAX_RENDERTARGETS, &impl_->renderTargetViews_[0],
                                                 impl_->depthStencilView_, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
         // TODO: Figure out why is this necessary
         SetViewport(viewport_);
         impl_->renderTargetsDirty_ = false;
+
+        if (newRenderTargetHash != impl_->renderTargetHash_)
+        {
+            renderTargetHashChanged = true;
+            impl_->renderTargetHash_ = newRenderTargetHash;
+        }
     }
 
     if (vertexShader_ == nullptr || pixelShader_ == nullptr)
@@ -2373,8 +2445,7 @@ void Graphics::PrepareDraw()
     if (impl_->vertexShaderDirty_ || impl_->pixelShaderDirty_ || impl_->blendStateDirty_ || impl_->depthStateDirty_ ||
         impl_->rasterizerStateDirty_ || impl_->primitiveTypeDirty_ || impl_->vertexDeclarationDirty_)
     {
-        bool pipelineStateDirty =
-            impl_->vertexShaderDirty_ || impl_->pixelShaderDirty_;
+        bool pipelineStateDirty = impl_->vertexShaderDirty_ || impl_->pixelShaderDirty_ || renderTargetHashChanged;
 
         if (impl_->vertexDeclarationDirty_ && vertexShader_)
         {
@@ -2475,7 +2546,7 @@ void Graphics::PrepareDraw()
 
             auto pipelineKey = std::make_tuple(vertexShader_, pixelShader_, impl_->blendStateHash_,
                                                impl_->depthStateHash_, impl_->rasterizerStateHash_,
-                                               vertexDeclarationHash_, impl_->primitiveType_);
+                                               vertexDeclarationHash_, impl_->primitiveType_, impl_->renderTargetHash_);
             auto iterator = impl_->pipelineStates_.find(pipelineKey);
             if (iterator == impl_->pipelineStates_.end())
             {
@@ -2489,15 +2560,36 @@ void Graphics::PrepareDraw()
                 pipelineStateCreateInfo.PSODesc.Name = "";
 #endif
                 pipelineStateCreateInfo.PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
-                pipelineStateCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
-                pipelineStateCreateInfo.GraphicsPipeline.RTVFormats[0] = impl_->swapChain_->GetDesc().ColorBufferFormat;
-                pipelineStateCreateInfo.GraphicsPipeline.DSVFormat = impl_->swapChain_->GetDesc().DepthBufferFormat;
+                if (impl_->renderTargetHash_ != 0)
+                {
+                    unsigned renderTargetsCount = 0;
+                    for (unsigned i = 0; i < MAX_RENDERTARGETS; i++)
+                    {
+                        if (impl_->renderTargetViews_[i])
+                        {
+                            pipelineStateCreateInfo.GraphicsPipeline.RTVFormats[i] =
+                                impl_->renderTargetViews_[i]->GetDesc().Format;
+                            renderTargetsCount = i + 1;
+                        }
+                        else
+                        {
+                            pipelineStateCreateInfo.GraphicsPipeline.RTVFormats[i] = TEX_FORMAT_UNKNOWN;
+                        }
+                    }
+                    pipelineStateCreateInfo.GraphicsPipeline.NumRenderTargets = renderTargetsCount;
+                }
+                else
+                {
+                    pipelineStateCreateInfo.GraphicsPipeline.NumRenderTargets = 0;
+                }
+                pipelineStateCreateInfo.GraphicsPipeline.DSVFormat =
+                    impl_->depthStencilView_ ? impl_->depthStencilView_->GetDesc().Format : TEX_FORMAT_UNKNOWN;
                 pipelineStateCreateInfo.GraphicsPipeline.PrimitiveTopology = impl_->GetPrimitiveTopology();
 
                 IShader* vertexShader = (IShader*)vertexShader_->GetGPUObject();
                 IShader* pixelShader = (IShader*)pixelShader_->GetGPUObject();
                 pipelineStateCreateInfo.pVS = vertexShader;
-                pipelineStateCreateInfo.pPS = pixelShader;
+                pipelineStateCreateInfo.pPS = pipelineStateCreateInfo.GraphicsPipeline.NumRenderTargets > 0 ? pixelShader : nullptr;
 
                 pipelineStateCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
 
@@ -2637,14 +2729,17 @@ void Graphics::PrepareDraw()
                     }
                 }
 
-                const unsigned* psBufferSizes = pixelShader_->GetConstantBufferSizes();
-                const String* psBufferNames = pixelShader_->GetConstantBufferNames();
-                for (unsigned i = 0; i < MAX_SHADER_PARAMETER_GROUPS; ++i)
+                if (pipelineStateCreateInfo.pPS)
                 {
-                    if (psBufferSizes[i] > 0 && !psBufferNames[i].Empty())
+                    const unsigned* psBufferSizes = pixelShader_->GetConstantBufferSizes();
+                    const String* psBufferNames = pixelShader_->GetConstantBufferNames();
+                    for (unsigned i = 0; i < MAX_SHADER_PARAMETER_GROUPS; ++i)
                     {
-                        pipelineState->GetStaticVariableByName(SHADER_TYPE_PIXEL, psBufferNames[i].CString())
-                            ->Set((IBuffer*)impl_->shaderProgram_->psConstantBuffers_[i]->GetGPUObject());
+                        if (psBufferSizes[i] > 0 && !psBufferNames[i].Empty())
+                        {
+                            pipelineState->GetStaticVariableByName(SHADER_TYPE_PIXEL, psBufferNames[i].CString())
+                                ->Set((IBuffer*)impl_->shaderProgram_->psConstantBuffers_[i]->GetGPUObject());
+                        }
                     }
                 }
 
@@ -2732,6 +2827,7 @@ void Graphics::PrepareDraw()
     const auto& desc =
         impl_->currentPipelineState_->GetDesc();
 
+    bool bindingChanged = false;
     if (pipelineStateChanged || (impl_->texturesDirty_ && impl_->firstDirtyTexture_ < M_MAX_UNSIGNED))
     {
         if (impl_->currentTextureMap_)
@@ -2747,6 +2843,8 @@ void Graphics::PrepareDraw()
                     impl_->shaderResourceViews_[textureMapEntry.textureUnit]->SetSampler(
                         impl_->samplers_[textureMapEntry.textureUnit]);
                     textureMapEntry.variable->Set(impl_->shaderResourceViews_[textureMapEntry.textureUnit]);
+
+                    bindingChanged = true;
                 }
             }
         }
@@ -2755,9 +2853,12 @@ void Graphics::PrepareDraw()
         impl_->texturesDirty_ = false;
     }
 
-    assert(impl_->currentShaderResourceBinding_);
-    impl_->deviceContext_->CommitShaderResources(impl_->currentShaderResourceBinding_,
-                                                 RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    if (pipelineStateChanged || bindingChanged)
+    {
+        assert(impl_->currentShaderResourceBinding_);
+        impl_->deviceContext_->CommitShaderResources(impl_->currentShaderResourceBinding_,
+                                                     RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
 
     if (impl_->scissorRectDirty_)
     {

@@ -698,8 +698,12 @@ void ShaderVariation::CreateFromSource()
 #endif
     }
 
+    auto shaderFullName = GetFullName();
+
     ShaderCreateInfo shaderCreateInfo;
-    memset(&shaderCreateInfo, 0, sizeof(shaderCreateInfo));
+    // TODO: Remove
+//    memset(&shaderCreateInfo, 0, sizeof(shaderCreateInfo));
+    shaderCreateInfo.Desc.Name = shaderFullName.CString();
     shaderCreateInfo.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
     shaderCreateInfo.Desc.UseCombinedTextureSamplers = true;
     shaderCreateInfo.Desc.CombinedSamplerSuffix = "_sampler";
@@ -721,6 +725,7 @@ void ShaderVariation::CreateFromSource()
     fclose(f);
 #endif
 
+    object_.ptr_ = nullptr;
     graphics_->GetImpl()->GetDevice()->CreateShader(shaderCreateInfo, (IShader**)&object_.ptr_);
     if (object_.ptr_ == nullptr)
     {

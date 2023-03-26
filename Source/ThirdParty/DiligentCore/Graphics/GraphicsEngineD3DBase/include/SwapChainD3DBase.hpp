@@ -33,6 +33,8 @@
 /// \file
 /// Base implementation of a D3D swap chain
 
+#define SWAP_CHAIN_ALLOW_TEARING
+
 namespace Diligent
 {
 
@@ -187,7 +189,9 @@ protected:
         // IDXGISwapChain::ResizeTarget(). When switching from windowed to fullscreen mode, the display
         // mode (or monitor resolution) will be changed to match the dimensions of the application window.
         swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-
+#ifdef SWAP_CHAIN_ALLOW_TEARING
+        swapChainDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+#endif
 
         CComPtr<IDXGIFactory2> pDXGIFactory;
 
