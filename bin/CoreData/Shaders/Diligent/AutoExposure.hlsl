@@ -4,6 +4,7 @@
 #include "ScreenPos.hlsl"
 #include "PostProcess.hlsl"
 
+#if !defined(D3D11) && !defined(DILIGENT)
 uniform float cAutoExposureAdaptRate;
 uniform float2 cAutoExposureLumRange;
 uniform float cAutoExposureMiddleGrey;
@@ -15,6 +16,28 @@ uniform float2 cHDR128InvSize;
 uniform float2 cLum64InvSize;
 uniform float2 cLum16InvSize;
 uniform float2 cLum4InvSize;
+#else
+#ifdef COMPILEVS
+cbuffer AutoExposure : register(b3)
+{
+    float2 cHDR128Offsets;
+    float2 cLum64Offsets;
+    float2 cLum16Offsets;
+    float2 cLum4Offsets;
+}
+#else
+cbuffer AutoExposure : register(b3)
+{
+    float cAutoExposureAdaptRate;
+    float cAutoExposureMiddleGrey;
+    float2 cAutoExposureLumRange;
+    float2 cHDR128InvSize;
+    float2 cLum64InvSize;
+    float2 cLum16InvSize;
+    float2 cLum4InvSize;
+}
+#endif
+#endif
 
 #if !defined(D3D11) && !defined(DILIGENT)
 float GatherAvgLum(sampler2D texSampler, float2 texCoord, float2 texelSize)

@@ -37,7 +37,13 @@ void VS(float4 iPos : POSITION,
     float3 iNormal: NORMAL,
     float2 iTexCoord : TEXCOORD0,
     #ifdef INSTANCED
-        float4x3 iModelInstance : TEXCOORD4,
+        #ifdef DILIGENT
+            float4 iModelInstanceCol1 : TEXCOORD4,
+            float4 iModelInstanceCol2 : TEXCOORD5,
+            float4 iModelInstanceCol3 : TEXCOORD6,
+        #else
+            float4x3 iModelInstance : TEXCOORD4,
+        #endif
     #endif
     out float4 oScreenPos : TEXCOORD0,
     out float2 oReflectUV : TEXCOORD1,

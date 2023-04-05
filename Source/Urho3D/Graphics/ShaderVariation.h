@@ -143,6 +143,9 @@ public:
     /// D3D11 vertex semantic names. Used internally.
     static const char* elementSemanticNames[];
 
+    /// Vulkan and OpenGL semantic mapping
+    static std::unordered_map<std::string, uint32_t> semanticsToAttribs;
+
 private:
     /// Load bytecode from a file. Return true if successful.
     bool LoadByteCode(const String& binaryShaderName);

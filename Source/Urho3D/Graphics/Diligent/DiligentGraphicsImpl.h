@@ -44,6 +44,10 @@
 #include <d3d11.h>
 #include <dxgi.h>
 
+// TODO: Consider removing once Diligent usage improves
+// This workaround is used to prevent artifacts in PBRMaterials sample hi resolution (fullscreen) no vsync mode
+#define USE_WAIT_FOR_IDLE_WORKAROUND
+
 // TODO: Remove
 #ifndef __FUNCTION_NAME__
 #ifdef WIN32 // WINDOWS
@@ -174,12 +178,16 @@ private:
         std::shared_ptr<TextureMap> textureMap_;
     };
 
+    #ifdef USE_WAIT_FOR_IDLE_WORKAROUND
+    std::unique_ptr<std::thread> waitForIdleThread_;
+    #endif
+
     Diligent::SwapChainDesc swapChainInitDesc_;
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice> device_;
     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> deviceContext_;
     Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain_;
     std::unordered_map<
-        std::tuple<ShaderVariation*, ShaderVariation*, unsigned, unsigned, unsigned, unsigned long long, PrimitiveType, uint8_t>,
+        std::tuple<ShaderVariation*, ShaderVariation*, unsigned, unsigned, unsigned, unsigned long long, PrimitiveType, uint32_t>,
         PipelineState> pipelineStates_;
     Diligent::RefCntAutoPtr<Diligent::IPipelineState> currentPipelineState_;
     Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> currentShaderResourceBinding_;
@@ -264,7 +272,7 @@ private:
     /// Primitive type dirty flag.
     bool primitiveTypeDirty_ = false;
 
-    uint8_t renderTargetHash_ = 0;
+    uint32_t renderTargetHash_ = 0;
 
 #if 0
     /// Graphics device.

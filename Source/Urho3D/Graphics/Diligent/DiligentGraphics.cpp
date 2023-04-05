@@ -306,6 +306,14 @@ Graphics::~Graphics()
 #else
     PARTIALLY_IMPLEMENTED();
 
+    #ifdef USE_WAIT_FOR_IDLE_WORKAROUND
+    if (impl_->waitForIdleThread_)
+    {
+        impl_->waitForIdleThread_->join();
+        impl_->waitForIdleThread_ = nullptr;
+    }
+    #endif
+
     if (window_)
     {
         SDL_ShowCursor(SDL_TRUE);
@@ -551,8 +559,24 @@ void Graphics::EndFrame()
     {
         URHO3D_PROFILE(Present);
 
+#ifdef USE_WAIT_FOR_IDLE_WORKAROUND
+        if (impl_->waitForIdleThread_)
+        {
+            impl_->waitForIdleThread_->join();
+            impl_->waitForIdleThread_ = nullptr;
+        }
+#endif
         SendEvent(E_ENDRENDERING);
         impl_->swapChain_->Present(screenParams_.vsync_ ? 1 : 0);
+
+#ifdef USE_WAIT_FOR_IDLE_WORKAROUND
+        const bool isVulkan = impl_->deviceType_ == RENDER_DEVICE_TYPE_VULKAN;
+
+        if (isVulkan)
+        {
+            impl_->waitForIdleThread_ = std::make_unique<std::thread>([device = impl_->device_.RawPtr()]() { device->IdleGPU(); });
+        }
+#endif
     }
 
     // Clean up too large scratch buffers
@@ -645,6 +669,9 @@ bool Graphics::ResolveToTexture(Texture2D* destination, const IntRect& viewport)
     srcBox.MaxY = Clamp(vpCopy.bottom_, 0, height_);
     srcBox.MinZ = 0;
     srcBox.MaxZ = 1;
+
+    impl_->deviceContext_->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+    impl_->renderTargetsDirty_ = true;
 
     const bool resolve = screenParams_.multiSample_ > 1;
     ITexture* source = impl_->defaultRenderTargetView_->GetTexture();
@@ -2180,9 +2207,10 @@ void Graphics::AdjustWindow(int& newWidth, int& newHeight, bool& newFullscreen, 
 
 bool Graphics::CreateDevice(int width, int height)
 {
-    const RENDER_DEVICE_TYPE deviceType = RENDER_DEVICE_TYPE_D3D11;
+    impl_->deviceType_ = RENDER_DEVICE_TYPE_VULKAN;
+//    impl_->deviceType_ = RENDER_DEVICE_TYPE_D3D12;
 
-    switch (deviceType)
+    switch (impl_->deviceType_)
     {
     case RENDER_DEVICE_TYPE_D3D11:
         {
@@ -2197,7 +2225,7 @@ bool Graphics::CreateDevice(int width, int height)
             }
 
             Diligent::Win32NativeWindow Window{GetWindowHandle(window_)};
-            impl_->swapChainInitDesc_.BufferCount = 3;
+            impl_->swapChainInitDesc_.BufferCount = 2;
             impl_->swapChainInitDesc_.Width = (UINT)width;
             impl_->swapChainInitDesc_.Height = (UINT)height;
             impl_->swapChainInitDesc_.ColorBufferFormat = sRGB_ ? TEX_FORMAT_RGBA8_UNORM_SRGB : TEX_FORMAT_RGBA8_UNORM;
@@ -2206,8 +2234,6 @@ bool Graphics::CreateDevice(int width, int height)
 
             pFactoryD3D11->CreateSwapChainD3D11(impl_->device_, impl_->deviceContext_, impl_->swapChainInitDesc_,
                                                 Diligent::FullScreenModeDesc{}, Window, &impl_->swapChain_);
-
-            impl_->deviceType_ = Diligent::RENDER_DEVICE_TYPE_D3D11;
         }
         break;
     case RENDER_DEVICE_TYPE_D3D12:
@@ -2227,7 +2253,7 @@ bool Graphics::CreateDevice(int width, int height)
             }
 
             Diligent::Win32NativeWindow Window{GetWindowHandle(window_)};
-            impl_->swapChainInitDesc_.BufferCount = 3;
+            impl_->swapChainInitDesc_.BufferCount = 2;
             impl_->swapChainInitDesc_.Width = (UINT)width;
             impl_->swapChainInitDesc_.Height = (UINT)height;
             impl_->swapChainInitDesc_.ColorBufferFormat = sRGB_ ? TEX_FORMAT_RGBA8_UNORM_SRGB : TEX_FORMAT_RGBA8_UNORM;
@@ -2236,8 +2262,40 @@ bool Graphics::CreateDevice(int width, int height)
 
             pFactoryD3D12->CreateSwapChainD3D12(impl_->device_, impl_->deviceContext_, impl_->swapChainInitDesc_,
                                                 Diligent::FullScreenModeDesc{}, Window, &impl_->swapChain_);
+        }
+        break;
+    case RENDER_DEVICE_TYPE_VULKAN:
+        {
+            auto* pFactoryVk = Diligent::GetEngineFactoryVk();
 
-            impl_->deviceType_ = Diligent::RENDER_DEVICE_TYPE_D3D12;
+            if (!impl_->device_)
+            {
+                EngineVkCreateInfo EngineCI;
+                EngineCI.DynamicHeapSize = 64 << 20;
+                EngineCI.UploadHeapPageSize = 8 << 20;
+
+                const char* const ppIgnoreDebugMessages[] = //
+                    {
+                        // Validation Performance Warning: [ UNASSIGNED-CoreValidation-Shader-OutputNotConsumed ]
+                        // Vertex attribute at location 1 not consumed by vertex shader
+                        "UNASSIGNED-CoreValidation-Shader-OutputNotConsumed" //
+                    };
+                EngineCI.ppIgnoreDebugMessageNames = ppIgnoreDebugMessages;
+                EngineCI.IgnoreDebugMessageCount = _countof(ppIgnoreDebugMessages);
+
+                pFactoryVk->CreateDeviceAndContextsVk(EngineCI, &impl_->device_, &impl_->deviceContext_);
+
+                CheckFeatureSupport();
+            }
+
+            Diligent::Win32NativeWindow Window{GetWindowHandle(window_)};
+            impl_->swapChainInitDesc_.BufferCount = 2;
+            impl_->swapChainInitDesc_.Width = (UINT)width;
+            impl_->swapChainInitDesc_.Height = (UINT)height;
+            impl_->swapChainInitDesc_.ColorBufferFormat = sRGB_ ? TEX_FORMAT_RGBA8_UNORM_SRGB : TEX_FORMAT_RGBA8_UNORM;
+            impl_->swapChainInitDesc_.DepthBufferFormat = TEX_FORMAT_D32_FLOAT;
+            impl_->swapChainInitDesc_.DefaultDepthValue = 0.f;
+            pFactoryVk->CreateSwapChainVk(impl_->device_, impl_->deviceContext_, impl_->swapChainInitDesc_, Window, &impl_->swapChain_);
         }
         break;
     default:
@@ -2396,7 +2454,7 @@ void Graphics::PrepareDraw()
     bool renderTargetHashChanged = false;
     if (impl_->renderTargetsDirty_)
     {
-        uint8_t newRenderTargetHash = 0;
+        uint32_t newRenderTargetHash = 0;
         impl_->depthStencilView_ = (depthStencil_ && depthStencil_->GetUsage() == TEXTURE_DEPTHSTENCIL)
                                        ? (ITextureView*)depthStencil_->GetRenderTargetView()
                                        : impl_->defaultDepthStencilView_;
@@ -2405,25 +2463,40 @@ void Graphics::PrepareDraw()
         if (!depthWrite_ && depthStencil_ && depthStencil_->GetReadOnlyView())
             impl_->depthStencilView_ = (ITextureView*)depthStencil_->GetReadOnlyView();
 
+        int renderTargetsCount = 0;
         for (unsigned i = 0; i < MAX_RENDERTARGETS; ++i)
         {
             impl_->renderTargetViews_[i] = (renderTargets_[i] && renderTargets_[i]->GetUsage() == TEXTURE_RENDERTARGET)
                                                ? (ITextureView*)renderTargets_[i]->GetRenderTargetView()
                                                : nullptr;
             if (impl_->renderTargetViews_[i])
+            {
+                uint32_t format = (uint32_t)impl_->renderTargetViews_[i]->GetDesc().Format;
                 newRenderTargetHash |= 1 << i;
+                // TODO: Consider replacing with a better hash function
+                newRenderTargetHash ^= format << (8 + i * 4);
+                renderTargetsCount = i + 1;
+            }
         }
         // If rendertarget 0 is null and not doing depth-only rendering, render to the backbuffer
         // Special case: if rendertarget 0 is null and depth stencil has same size as backbuffer, assume the intention
         // is to do backbuffer rendering with a custom depth stencil
         if (!renderTargets_[0] && (!depthStencil_ || (depthStencil_ && depthStencil_->GetWidth() == width_ &&
                                                       depthStencil_->GetHeight() == height_)))
+        {
             impl_->renderTargetViews_[0] = impl_->defaultRenderTargetView_;
 
-        if (impl_->renderTargetViews_[0])
-            newRenderTargetHash |= 1;
+            if (impl_->renderTargetViews_[0])
+            {
+                uint32_t format = (uint32_t)impl_->renderTargetViews_[0]->GetDesc().Format;
+                newRenderTargetHash |= 1;
+                // TODO: Consider replacing with a better hash function
+                newRenderTargetHash ^= format << 8;
+                renderTargetsCount = max(renderTargetsCount, 1);
+            }
+        }
 
-        impl_->deviceContext_->SetRenderTargets(MAX_RENDERTARGETS, &impl_->renderTargetViews_[0],
+        impl_->deviceContext_->SetRenderTargets(renderTargetsCount, &impl_->renderTargetViews_[0],
                                                 impl_->depthStencilView_, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
         // TODO: Figure out why is this necessary
@@ -2458,6 +2531,7 @@ void Graphics::PrepareDraw()
 
                 impl_->firstDirtyVB_ = impl_->lastDirtyVB_ = M_MAX_UNSIGNED;
             }
+            impl_->vertexDeclarationDirty_ = false;
 
             unsigned long long newVertexDeclarationHash = 0;
             for (unsigned i = 0; i < MAX_VERTEX_STREAMS; ++i)
@@ -2624,6 +2698,8 @@ void Graphics::PrepareDraw()
                 PODVector<LayoutElement> layoutElements;
                 unsigned prevLayoutElementsCount = 0;
 
+                const bool isHlsl = (impl_->deviceType_ == RENDER_DEVICE_TYPE_D3D11) || (impl_->deviceType_ == RENDER_DEVICE_TYPE_D3D12);
+
                 layoutElements.Reserve(MAX_VERTEX_STREAMS);
                 for (unsigned i = 0; i < MAX_VERTEX_STREAMS; ++i)
                 {
@@ -2637,12 +2713,20 @@ void Graphics::PrepareDraw()
                     {
                         const VertexElement& srcElement = srcElements[j];
                         const char* semanticName = ShaderVariation::elementSemanticNames[srcElement.semantic_];
+                        Diligent::Uint32 semanticIndex = srcElement.index_;
+
+                        if (!isHlsl)
+                        {
+                            std::string fullSemanticName = std::string(semanticName) + std::to_string(semanticIndex);
+                            semanticIndex = ShaderVariation::semanticsToAttribs[fullSemanticName];
+                            semanticName = "ATTRIB";
+                        }
 
                         // Override existing element if necessary
                         for (unsigned k = 0; k < prevLayoutElementsCount; ++k)
                         {
                             if (layoutElements[k].HLSLSemantic == semanticName &&
-                                layoutElements[k].InputIndex == srcElement.index_)
+                                layoutElements[k].InputIndex == semanticIndex)
                             {
                                 isExisting = true;
                                 layoutElements[k].BufferSlot = i;
@@ -2659,7 +2743,7 @@ void Graphics::PrepareDraw()
 
                         LayoutElement newLayoutElement;
                         newLayoutElement.HLSLSemantic = semanticName;
-                        newLayoutElement.InputIndex = srcElement.index_;
+                        newLayoutElement.InputIndex = semanticIndex;
                         newLayoutElement.ValueType = diligentValueType[srcElement.type_];
                         newLayoutElement.NumComponents = diligentNumComponents[srcElement.type_];
                         newLayoutElement.IsNormalized = diligentIsNormalized[srcElement.type_];
@@ -2823,9 +2907,6 @@ void Graphics::PrepareDraw()
 
     assert(impl_->currentPipelineState_ != nullptr);
     impl_->deviceContext_->SetPipelineState(impl_->currentPipelineState_);
-
-    const auto& desc =
-        impl_->currentPipelineState_->GetDesc();
 
     bool bindingChanged = false;
     if (pipelineStateChanged || (impl_->texturesDirty_ && impl_->firstDirtyTexture_ < M_MAX_UNSIGNED))

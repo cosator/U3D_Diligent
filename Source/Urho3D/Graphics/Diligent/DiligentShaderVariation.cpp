@@ -42,6 +42,8 @@ using namespace Diligent;
 namespace Urho3D
 {
 
+// clang-format off
+
 static const std::unordered_map<std::string, ShaderParameterGroup> vsShaderParameterGroupMap =
 {
     {"FrameVS", SP_FRAME},
@@ -73,6 +75,52 @@ const char* ShaderVariation::elementSemanticNames[] =
     "BLENDINDICES",
     "OBJECTINDEX"
 };
+
+std::unordered_map<std::string, uint32_t> ShaderVariation::semanticsToAttribs = {
+    {"POSITION", 0},
+    {"POSITION0", 0},
+    {"POSITION1", 1},
+    {"POSITION2", 2},
+    {"POSITION3", 3},
+    {"NORMAL", 4},
+    {"NORMAL0", 4},
+    {"NORMAL1", 5},
+    {"NORMAL2", 6},
+    {"NORMAL3", 7},
+    {"COLOR", 8},
+    {"COLOR0", 8},
+    {"COLOR1", 9},
+    {"COLOR2", 11},
+    {"COLOR3", 12},
+    {"COLOR4", 13},
+    {"COLOR5", 14},
+    {"COLOR6", 15},
+    {"COLOR7", 16},
+    {"TEXCOORD", 17},
+    {"TEXCOORD0", 17},
+    {"TEXCOORD1", 18},
+    {"TEXCOORD2", 19},
+    {"TEXCOORD3", 20},
+    {"TEXCOORD4", 21},
+    {"TEXCOORD5", 22},
+    {"TEXCOORD6", 23},
+    {"TEXCOORD7", 24},
+    {"TANGENT", 25},
+    {"TANGENT0", 25},
+    {"TANGENT1", 26},
+    {"TANGENT2", 27},
+    {"TANGENT3", 28},
+    {"BINORMAL", 29},
+    {"BINORMAL0", 29},
+    {"BLENDWEIGHT", 30},
+    {"BLENDWEIGHT0", 30},
+    {"BLENDINDICES", 31},
+    {"BLENDINDICES0", 31},
+    {"OBJECTINDEX", 32},
+    {"OBJECTINDEX0", 32}
+};
+
+// clang-format on
 
 void ShaderVariation::OnDeviceLost()
 {
@@ -696,6 +744,16 @@ void ShaderVariation::CreateFromSource()
         if (sourceCode.Find(defines[i]) == String::NPOS)
             URHO3D_LOGWARNING("Shader " + GetFullName() + " does not use the define " + defines[i]);
 #endif
+    }
+
+    if (graphics_->GetImpl()->GetDeviceType() == RENDER_DEVICE_TYPE_VULKAN)
+    {
+        for (const auto& semanticsToAttrib : semanticsToAttribs)
+        {
+            std::string semanticName =
+                std::string("ATTRIB") + std::to_string(semanticsToAttrib.second);
+            macros.AddShaderMacro(semanticsToAttrib.first.c_str(), semanticName.c_str());
+        }
     }
 
     auto shaderFullName = GetFullName();

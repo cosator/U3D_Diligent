@@ -103,12 +103,29 @@ float3 GetTrailNormal(float4 iPos, float3 iParentPos, float3 iForward)
 }
 #endif
 
+#ifdef DILIGENT
+
+#if defined(SKINNED)
+    #define iModelMatrix GetSkinMatrix(iBlendWeights, iBlendIndices)
+#elif defined(INSTANCED)
+    #define iModelMatrix float4x3(float3(iModelInstanceCol1.x, iModelInstanceCol2.x, iModelInstanceCol3.x),\
+                                  float3(iModelInstanceCol1.y, iModelInstanceCol2.y, iModelInstanceCol3.y),\
+                                  float3(iModelInstanceCol1.z, iModelInstanceCol2.z, iModelInstanceCol3.z),\
+                                  float3(iModelInstanceCol1.w, iModelInstanceCol2.w, iModelInstanceCol3.w))
+#else
+    #define iModelMatrix cModel
+#endif
+
+#else
+
 #if defined(SKINNED)
     #define iModelMatrix GetSkinMatrix(iBlendWeights, iBlendIndices)
 #elif defined(INSTANCED)
     #define iModelMatrix iModelInstance
 #else
     #define iModelMatrix cModel
+#endif
+
 #endif
 
 #if defined(BILLBOARD)
